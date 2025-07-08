@@ -1,4 +1,5 @@
 #!/bin/bash
+###################################
 # This file is part of immich-geodata-cn-companion.
 #
 # immich-geodata-cn-companion is free software: you can redistribute it and/or modify
@@ -13,9 +14,10 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with immich-geodata-cn-companion. If not, see <https://www.gnu.org/licenses/>.
-
+#
 # Environment Variables:
 #   COMPANION_DEBUG: Enable debug mode (ANY VALUE, default: not set)
+#   COMPANION_GHPROXY_PREFIX: Prefix for GHPROXY. this will works on all HTTP requests with Github (default: )
 #   COMPANION_RELEASE_API: API URL to fetch the latest release information (default: https://api.github.com/repos/ZingLix/immich-geodata-cn/releases/latest)
 #   COMPANION_GEODATE_DIRPATH: Directory path for geodata (required)
 #   COMPANION_I18N_DIRPATH: Directory path for i18n (required)
@@ -28,9 +30,8 @@
 #   COMPANION_DOCKER_AUTO_RESTART: Enable Docker auto restart (true/false, default: false)
 #   COMPANION_DOCKER_CONTAINER_NAME: Name of the Docker container to restart if updates are found (required if COMPANION_DOCKER_AUTO_RESTART is true, default: immich)
 #   COMPANION_DOCKER_API: Docker API socket path (default: /var/run/docker.sock)
-
+#
 ###################################
-
 
 if [[ -z "$COMPANION_DEBUG" ]]; then
     set -e
@@ -63,6 +64,15 @@ fi
 if [[ ! -d "$COMPANION_I18N_DIRPATH" ]]; then
     echo "Error: I18N directory does not exist at $COMPANION_I18N_DIRPATH"
     exit 1
+fi
+
+# check COMPANION_GHPROXY_PREFIX, if set and postfix with slash, remove the slash
+if [[ -n "$COMPANION_GHPROXY_PREFIX" ]]; then
+    if [[ "$COMPANION_GHPROXY_PREFIX" =~ /$ ]]; then
+        COMPANION_GHPROXY_PREFIX="${COMPANION_GHPROXY_PREFIX%/}"
+    fi
+else
+    COMPANION_GHPROXY_PREFIX=""
 fi
 
 # check COMPANION_UID
@@ -103,13 +113,6 @@ else
     COMPANION_DOCKER_AUTO_RESTART=1
 fi
 
-# check COMPANION_PERMISSION_FIX
-if [[ "$COCOMPANION_PERMISSION_FIX" == "true" ]]; then
-    COMPANION_PERMISSION_FIX=0
-else
-    COMPANION_PERMISSION_FIX=1
-fi
-
 # clean up work directory
 if [[ -d "$WORK_DIR" ]]; then
     echo "Work directory $WORK_DIR already exists."
@@ -120,8 +123,14 @@ else
 fi
 
 # download release information from COMPANION_RELEASE_API
+
+release_api_url="$COMPANION_RELEASE_API"
+if [[ "$release_api_url" =~ ^https?://github\.com && -n "$COMPANION_GHPROXY_PREFIX" ]]; then
+    api_url="$COMPANION_GHPROXY_PREFIX/$api_url"
+    echo "Using GHPROXY: $release_api_url"
+fi
 release_file="$WORK_DIR/release.json"
-resp=$(curl -s $COMPANION_RELEASE_API -o release.json -w "%{http_code}")
+resp=$(curl -s $release_api_url -o "$release_file" -w "%{http_code}")
 
 if [[ $? -ne 0 ]]; then
     echo "Error: Failed to fetch release information from $COMPANION_RELEASE_API"
@@ -136,9 +145,9 @@ if [[ -z "$release_id" || "$release_id" == "null" ]]; then
 fi
 
 # update GEODATE
-geodata_asset_name="$COMPANION_GEODATA_VERSION.zip"
-geodata_asset_url=$(echo "$resp" | jq -r ".assets[] | select(.name | test(\"$geodata_asset_name\$\")) | .browser_download_url")
-geodata_filename="$WORK_DIR/$geodata_asset_name"
+geodata_asset_name="$COMPANION_GEODATE_ASSET_NAME"
+geodata_asset_url=$(cat "$release_file" | jq -r ".assets[] | select(.name | test(\"$geodata_asset_name\$\")) | .browser_download_url")
+geodata_file="$WORK_DIR/$geodata_asset_name"
 geodata_release_id=$(cat "$COMPANION_GEODATE_DIRPATH/.release_id" || echo "")
 
 geodata_update_flag=1
@@ -150,21 +159,21 @@ if [[ -z "$geodata_asset_url" ]]; then
 elif [[ "$geodata_release_id" == "$release_id" ]]; then
     echo "No new geodata release found. Current release ID: $geodata_release_id"
 else
+    if [[ "$geodata_asset_url" =~ ^https?://github\.com && -n "$COMPANION_GHPROXY_PREFIX" ]]; then
+        geodata_asset_url="$COMPANION_GHPROXY_PREFIX/$geodata_asset_url"
+        echo "Using GHPROXY: $geodata_asset_url"
+    fi
+
     echo "Downloading geodata asset from $geodata_asset_url"
-    curl -L -o "$geodata_filename" "$geodata_asset_url" || {
+    curl -L -o "$geodata_file" "$geodata_asset_url" || {
         echo "Error: Failed to download geodata asset"
     }
     if [[ -f "$geodata_file" ]]; then
         echo "extracting geodata asset to $COMPANION_GEODATE_DIRPATH"
-        unzip -o "$geodata_file" -d "$COMPANION_GEODATE_DIRPATH"
+        unzip -o "$geodata_file" -d "$WORK_DIR"
+        cp -a $WORK_DIR/geodata/* "$COMPANION_GEODATE_DIRPATH"
         echo "remove temporary geodata file $geodata_filename"
-        rm -f "$geodata_filename"
-        if [[ $COMPANION_PERMISSION_FIX -eq 0 ]]; then
-            echo "setting ownership to UID: $COMPANION_UID, GID: $COMPANION_GID for $COMPANION_GEODATE_DIRPATH"
-            # set ownership to COMPANION_UID and COMPANION_GID
-            chmod -R "$COMPANION_PERMISSION_MASK" "$COMPANION_GEODATE_DIRPATH"
-            chmod -R u=X,g=X $COMPANION_GEODATE_DIRPATH
-        fi
+        rm -f "$geodata_file"
         # create .release_id file in COMPANION_GEODATE_DIRPATH
         echo "$release_id" >"$COMPANION_GEODATE_DIRPATH/.release_id"
         # update flag
@@ -174,8 +183,8 @@ fi
 
 # update I18N
 i18n_asset_name="i18n-iso-countries.zip"
-i18n_asset_url=$(echo "$resp" | jq -r ".assets[] | select(.name | test(\"$i18n_asset_name\$\")) | .browser_download_url")
-i18n_filename="/work/$i18n_asset_name"
+i18n_asset_url=$(cat "$release_file" | jq -r ".assets[] | select(.name | test(\"$i18n_asset_name\$\")) | .browser_download_url")
+i18n_filename="$WORK_DIR/$i18n_asset_name"
 i18n_release_id=$(cat "$COMPANION_I18N_DIRPATH/.release_id" || echo "")
 
 i18n_update_flag=1
@@ -184,9 +193,14 @@ i18n_update_flag=1
 if [[ -z "$i18n_asset_url" ]]; then
     echo "No i18n asset found in the release."
 # check .release_id in COMPANION_I18N_DIRPATH
-elif [[ "i18n_release_id" == "$release_id" ]]; then
+elif [[ "$i18n_release_id" == "$release_id" ]]; then
     echo "No new i18n release found. Current release ID: $i18n_release_id"
 else
+    if [[ "$i18n_asset_url" =~ ^https?://github\.com && -n "$COMPANION_GHPROXY_PREFIX" ]]; then
+        i18n_asset_url="$COMPANION_GHPROXY_PREFIX/$i18n_asset_url"
+        echo "Using GHPROXY: $i18n_asset_url"
+    fi
+
     echo "Downloading i18n asset from $i18n_asset_url"
     curl -L -o "$i18n_filename" "$i18n_asset_url" || {
         echo "Error: Failed to download i18n asset"
@@ -194,14 +208,10 @@ else
 
     if [[ -f "$i18n_filename" ]]; then
         echo "extracting i18n asset to $COMPANION_I18N_DIRPATH"
-        unzip -o "$i18n_filename" -d "$COMPANION_I18N_DIRPATH"
+        unzip -o "$i18n_filename" -d "$WORK_DIR"
         rm -f "$18n_filename"
+        cp $WORK_DIR/i18n-iso-countries/langs/* "$COMPANION_I18N_DIRPATH/"
         # create .release_id file in COMPANION_I18N_DIRPATH
-        if [[ $COMPANION_PERMISSION_FIX -eq 0 ]]; then
-            echo "setting ownership to UID: $COMPANION_UID, GID: $COMPANION_GID for $COMPANION_I18N_DIRPATH"
-            chmod -R "$COMPANION_PERMISSION_MASK" $COMPANION_I18N_DIRPATH
-            chmod -R u=X,g=X $COMPANION_I18N_DIRPATH
-        fi
         echo "$release_id" >"$COMPANION_I18N_DIRPATH/.release_id"
         i18n_update_flag=0
     fi
@@ -221,9 +231,14 @@ fi
 
 # do docker restart
 echo "Restarting Docker container $COMPANION_DOCKER_CONTAINER_NAME"
-resp_code=$(curl -s -w "%{http_code}" --unix-socket "$COMPANION_DOCKER_API" -X POST "http://localhost/containers/$COMPANION_DOCKER_CONTAINER_NAME/restart")
+docker_resp_body="$WORK_DIR/docker_response"
+docker_resp_code=$(curl -s -o "$docker_resp_body" -w "%{http_code}" --unix-socket "$COMPANION_DOCKER_API" -X POST "http://localhost/containers/$COMPANION_DOCKER_CONTAINER_NAME/restart")
 
-if [[ $resp_code -ge 400 ]]; then
+if [[ -f "$docker_resp_body" && -s "$docker_resp_body" ]]; then
+    echo "response from docker: $(cat "$docker_resp_body")"
+fi
+
+if [[ $docker_resp_code -ge 400 ]]; then
     echo "Error: Failed to restart Docker container $COMPANION_DOCKER_CONTAINER_NAME"
 else
     echo "Docker container $COMPANION_DOCKER_CONTAINER_NAME restarted successfully."

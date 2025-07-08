@@ -20,13 +20,13 @@ if [[ ! -d /etc/cron ]]; then
     mkdir -p /etc/cron
 fi
 
-if [[ ! -z $COMPONION_CRON_EXPRESSION ]]; then
-    echo "COMPONION_CRON_EXPRESSION is not set, using default value: '0 0 * * *'"
-    COMPONION_CRON_EXPRESSION="0 0 * * *"
+if [[ -z $COMPANION_CRON_EXPRESSION ]]; then
+    echo "COMPANION_CRON_EXPRESSION is not set, using default value: '0 5 * * *'"
+    COMPANION_CRON_EXPRESSION="0 5 * * *"
 fi
 
 cat <<EOF >/etc/cron/crontab
-$COMPONION_CRON_EXPRESSION bash /update.sh
+$COMPANION_CRON_EXPRESSION bash /update.sh
 # empty line
 EOF
 

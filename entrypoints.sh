@@ -14,9 +14,10 @@
 #  You should have received a copy of the GNU General Public License
 #  along with immich-geodata-cn-companion. If not, see <https://www.gnu.org/licenses/>.
 
-set -u
+set -e
 
 if [[ ! -d /etc/cron ]]; then
+    echo "Creating /etc/cron directory as it does not exist"
     mkdir -p /etc/cron
 fi
 
@@ -26,9 +27,11 @@ if [[ -z $COMPANION_CRON_EXPRESSION ]]; then
 fi
 
 cat <<EOF >/etc/cron/crontab
-$COMPANION_CRON_EXPRESSION bash /update.sh
+$COMPANION_CRON_EXPRESSION /update.sh
 # empty line
 EOF
 
+echo "Setting up cron job with expression: $COMPANION_CRON_EXPRESSION"
 crontab /etc/cron/crontab
+echo "Crond is running"
 crond -f

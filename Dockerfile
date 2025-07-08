@@ -18,6 +18,7 @@ RUN apk --no-cache add \
 
 COPY update.sh update.sh
 COPY entrypoints.sh entrypoints.sh
+RUN chmod +x update.sh entrypoints.sh
 
-ENTRYPOINT ["sh", "-c"]
-CMD ["bash", "/entrypoints.sh"]
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["/entrypoints.sh"]

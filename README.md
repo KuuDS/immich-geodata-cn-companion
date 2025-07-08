@@ -16,7 +16,7 @@
    - 配置并启动一个基于 `cron` 的定时任务，定期运行 `update.sh` 脚本。
    - 定时任务的时间表达式由环境变量 `COMPONION_CRON_EXPRESSION` 控制。
 
-## 环境变量用法
+## 环境变量介绍
 
 以下是脚本支持的环境变量及其用途：
 
@@ -28,19 +28,20 @@
 | `COMPANION_RELEASE_API`    | 指定用于获取最新 Release 信息的 GitHub API URL | 否       | `https://api.github.com/repos/ZingLix/immich-geodata-cn/releases/latest` |
 | `COMPANION_GEODATE_DIRPATH`| Geodata 的存储目录路径                        | 是       | 无                                          |
 | `COMPANION_I18N_DIRPATH`   | 国际化数据（I18N）的存储目录路径                | 是       | 无                                          |
-| `COMPANION_GEODATE_ASSET_NAME` | 需要下载的 Geodata 的文件名               | 否       | `geodata.zip`                               |
+| `COMPANION_GEODATE_ASSET_NAME` | 需要下载的 Geodata 的文件名, 如`geodata_admin_2_admin_3_admin_4_full.zip`| 否 | `geodata.zip`      |
 | `COMPANION_I18N_ASSET_NAME`| 国际化数据资产的文件名                         | 否       | `i18n-iso-countries.zip`                    |
-| `COMPANION_UID`            | 文件所有者的用户 ID                           | 否       | `1000`                                      |
-| `COMPANION_GID`            | 文件所有者的组 ID                         | 否       | `1000`                                      |
-| `COMPANION_PERMISSION_MASK`| 文件权限掩码                              | 否       | `640`                                       |
+| `COMPANION_PERMISSION_FIX` | 文件权限修复开关，值等于true时开启              | 否       | 无                                         |
+| `COMPANION_UID`            | 资源文件的UID                                | 否       | `1000`                                      |
+| `COMPANION_GID`            | 资源文件的GID                                | 否       | `1000`                                      |
+| `COMPANION_PERMISSION_MASK`| 文件权限掩码                                 | 否       | `640`                                       |
 
 ### **Docker 自动重启相关环境变量**
 
 | 变量名                        | 说明                                                                 | 必填 | 默认值                      |
 |-------------------------------|----------------------------------------------------------------------|-----|-----------------------------|
-| `COMPANION_DOCKER_AUTO_RESTART` | 是否启用 Docker 容器自动重启功能（`true` 或 `false`）                 | 否       | `false`                     |
-| `COMPANION_DOCKER_CONTAINER_NAME` | 需要重启的 Docker 容器名称（当 `COMPANION_DOCKER_AUTO_RESTART` 为 `true` 时必填） | 否       | `immich`                    |
-| `COMPANION_DOCKER_API`         | Docker API 的 Unix Socket 路径                                       | 否       | `/var/run/docker.sock`      |
+| `COMPANION_DOCKER_AUTO_RESTART` | 是否启用 Docker 容器自动重启功能（`true` 或 `false`）                 | 否       | `false`                  |
+| `COMPANION_DOCKER_CONTAINER_NAME` | 需要重启的 Docker 容器名称（当 `COMPANION_DOCKER_AUTO_RESTART` 为 `true` 时必填） | 否       | `immich`   |
+| `COMPANION_DOCKER_API`         | Docker API 的 Unix Socket 路径                                       | 否       | `/var/run/dock.sock`   |
 
 ### **定时任务相关环境变量**
 
@@ -50,19 +51,23 @@
 
 ## 使用示例
 
+请根据实际部署修改`/path/to/geodata`和`/path/to/i18n-iso-countries`
+
 ### 手动执行一次
 
 ```bash
 docker run --rm \
+  --restart=unless-stopped \
   --name immich-companion \
-  -e COMPANION_GEODATE_DIRPATH=/data/geodata \
-  -e COMPANION_I18N_DIRPATH=/data/i18n \
+  -e COMPANION_GEODATE_DIRPATH=/build/geodata \
+  -e COMPANION_I18N_DIRPATH=usr/src/app/node_modules/i18n-iso-countries \
   -e COMPANION_DOCKER_AUTO_RESTART=true \
   -e COMPANION_DOCKER_CONTAINER_NAME=immich \
+  -e COMPONION_CRON_EXPRESSION="0 0 * * *" \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /path/to/geodata:/data/geodata \
-  -v /path/to/i18n:/data/i18n \
-  ghcr.io/kuuds/immich-companion:latest \
+  -v /path/to/i18n-iso-countries:/usr/src/app/node_modules/i18n-iso-countries \
+  -v /path/to/geodata:/build/geodata \
+  immich-companion:latest
   bash update.sh
 ```
 
@@ -74,13 +79,14 @@ docker run --rm \
 docker run -d \
   --restart=unless-stopped \
   --name immich-companion \
-  -e COMPANION_GEODATE_DIRPATH=/data/geodata \
-  -e COMPANION_I18N_DIRPATH=/data/i18n \
+  -e COMPANION_GEODATE_DIRPATH=/build/geodata \
+  -e COMPANION_I18N_DIRPATH=usr/src/app/node_modules/i18n-iso-countries \
   -e COMPANION_DOCKER_AUTO_RESTART=true \
   -e COMPANION_DOCKER_CONTAINER_NAME=immich \
   -e COMPONION_CRON_EXPRESSION="0 0 * * *" \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /data:/data \
+  -v /path/to/i18n-iso-countries:/usr/src/app/node_modules/i18n-iso-countries \
+  -v /path/to/geodata:/build/geodata \
   immich-companion:latest
 ```
 
@@ -94,23 +100,44 @@ services:
     image: ghcr.io/immich-app/immich-server:latest
     container_name: immich
     # ....
-  immich-companion:
+    volumes:
+      - /path/to/geodata:/build/geodata
+      - /path/to/i18n:/usr/src/app/node_modules/i18n-iso-countries/langs
+  immich-geodata-cn-companion:
     image: ghcr.io/kuuds/immich-geodata-cn-companion:latest
-    container_name: immich-companion
+    container_name: immich-geodata-cn-companion
     restart: unless-stopped
     environment:
-      COMPANION_GEODATE_DIRPATH: /data/geodata
-      COMPANION_I18N_DIRPATH: /data/i18n
+      # 需要调试时开启
+      #COMPANION_DEBUG: 1
+      # 使用自己的镜像地址访问Github API，或自己的fork仓库地址
+      #COMPANION_RELEASE_API: https://your.mirror.site/https://api.github.com/repos/ZingLix/immich-geodata-cn/releases/latest
+      # 下载指定的Geodata文件
+      COMPANION_GEODATE_ASSET_NAME: geodata_admin_2_admin_3_admin_4_full.zip
+      COMPANION_GEODATE_DIRPATH: /build/geodata
+      # 下载指定的i18n文件，一般无须修改
+      COMPANION_I18N_ASSET_NAME: /i18n-iso-countries.zip
+      COMPANION_I18N_DIRPATH: /usr/src/app/node_modules/i18n-iso-countries
+      # 修改文件权限，防止immich无法读取
+      #COMPANION_PERMISSION_FIX: true
+      #COMPANION_UID: 1000
+      #COMPANION_GID: 1000
+      #COMPANION_PERMISSION_MASK: 640
+      # 更新文件后是否重启容器
       COMPANION_DOCKER_AUTO_RESTART: "true"
+      # docker container restart {{ container_name }}
       COMPANION_DOCKER_CONTAINER_NAME: immich
+      # docker unix sock地址，不支持TCP/TLS
+      COMPANION_DOCKER_API: /var/run/docker.sock
+      # 定时任务CRON表达式， 默认0 0 * * *
       COMPONION_CRON_EXPRESSION: "0 2 * * *"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /path/to/i18n:/data/i18n
-      - /path/to/geodata:/data/geodata
+      - /path/to/i18n-iso-countries:/usr/src/app/node_modules/i18n-iso-countries
+      - /path/to/geodata:/build/geodata
     depends_on:
       - immich
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0.

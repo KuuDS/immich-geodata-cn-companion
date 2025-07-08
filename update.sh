@@ -21,6 +21,7 @@
 #   COMPANION_I18N_DIRPATH: Directory path for i18n (required)
 #   COMPANION_GEODATE_ASSET_NAME: Name of the geodata asset (default: geodata.zip)
 #   COMPANION_I18N_ASSET_NAME: Name of the i18n asset (default: i18n-iso-countries.zip)
+#   COMPANION_PERMISSION_FIX: Enable permission fix (true/false, default: )
 #   COMPANION_UID: User ID for file ownership (default: 1000)
 #   COMPANION_GID: Group ID for file ownership (default: 1000)
 #   COMPANION_PERMISSION_MASK: Permission mask for files (default: 640)
@@ -29,6 +30,7 @@
 #   COMPANION_DOCKER_API: Docker API socket path (default: /var/run/docker.sock)
 
 ###################################
+
 
 if [[ -z "$COMPANION_DEBUG" ]]; then
     set -e
@@ -101,6 +103,12 @@ else
     COMPANION_DOCKER_AUTO_RESTART=1
 fi
 
+# check COMPANION_PERMISSION_FIX
+if [[ "$COCOMPANION_PERMISSION_FIX" == "true" ]]; then
+    COMPANION_PERMISSION_FIX=0
+else
+    COMPANION_PERMISSION_FIX=1
+fi
 
 # clean up work directory
 if [[ -d "$WORK_DIR" ]]; then
@@ -151,8 +159,13 @@ else
         unzip -o "$geodata_file" -d "$COMPANION_GEODATE_DIRPATH"
         echo "remove temporary geodata file $geodata_filename"
         rm -f "$geodata_filename"
+        if [[ $COMPANION_PERMISSION_FIX -eq 0 ]]; then
+            echo "setting ownership to UID: $COMPANION_UID, GID: $COMPANION_GID for $COMPANION_GEODATE_DIRPATH"
+            # set ownership to COMPANION_UID and COMPANION_GID
+            chmod -R "$COMPANION_PERMISSION_MASK" "$COMPANION_GEODATE_DIRPATH"
+            chmod -R u=X,g=X $COMPANION_GEODATE_DIRPATH
+        fi
         # create .release_id file in COMPANION_GEODATE_DIRPATH
-        chmod -R "$COMPANION_PERMISSION_MASK" "$COMPANION_I18N_DIRPATH"
         echo "$release_id" >"$COMPANION_GEODATE_DIRPATH/.release_id"
         # update flag
         geodata_update_flag=0
@@ -184,9 +197,12 @@ else
         unzip -o "$i18n_filename" -d "$COMPANION_I18N_DIRPATH"
         rm -f "$18n_filename"
         # create .release_id file in COMPANION_I18N_DIRPATH
+        if [[ $COMPANION_PERMISSION_FIX -eq 0 ]]; then
+            echo "setting ownership to UID: $COMPANION_UID, GID: $COMPANION_GID for $COMPANION_I18N_DIRPATH"
+            chmod -R "$COMPANION_PERMISSION_MASK" $COMPANION_I18N_DIRPATH
+            chmod -R u=X,g=X $COMPANION_I18N_DIRPATH
+        fi
         echo "$release_id" >"$COMPANION_I18N_DIRPATH/.release_id"
-        echo "setting ownership to UID: $COMPANION_UID, GID: $COMPANION_GID for $COMPANION_I18N_DIRPATH"
-        chmod -R "$COMPANION_PERMISSION_MASK" "$COMPANION_I18N_DIRPATH"
         i18n_update_flag=0
     fi
 fi

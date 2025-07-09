@@ -12,7 +12,7 @@
    - 可选支持自动重启指定的 Docker 容器（如 Immich）以应用更新。
    - 提供文件权限管理和所有权设置。
 
-1. **`entrypoints.sh`**
+2. **`entrypoints.sh`**
    - 配置并启动一个基于 `cron` 的定时任务，定期运行 `update.sh` 脚本。
    - 定时任务的时间表达式由环境变量 `COMPONION_CRON_EXPRESSION` 控制。
 
@@ -20,7 +20,7 @@
 
 以下是脚本支持的环境变量及其用途：
 
-### **通用环境变量**
+### 通用环境变量
 
 | 变量名                     | 说明                                         | 必填 | 默认值                                      |
 |----------------------------|--------------------------------------------|----|---------------------------------------------|
@@ -31,7 +31,7 @@
 | `COMPANION_GEODATE_ASSET_NAME` | 需要下载的 Geodata 的文件名, 如`geodata_admin_2_admin_3_admin_4_full.zip`| 否 | `geodata.zip`      |
 | `COMPANION_I18N_ASSET_NAME`| 国际化数据资产的文件名                         | 否       | `i18n-iso-countries.zip`                    |
 
-### **Docker 自动重启相关环境变量**
+### Docker 自动重启相关环境变量
 
 | 变量名                        | 说明                                                                 | 必填 | 默认值                      |
 |-------------------------------|----------------------------------------------------------------------|-----|-----------------------------|
@@ -39,7 +39,7 @@
 | `COMPANION_DOCKER_CONTAINER_NAME` | 需要重启的 Docker 容器名称（当 `COMPANION_DOCKER_AUTO_RESTART` 为 `true` 时必填） | 否       | `immich`   |
 | `COMPANION_DOCKER_API`         | Docker API 的 Unix Socket 路径                                       | 否       | `/var/run/dock.sock`   |
 
-### **定时任务相关环境变量**
+### 定时任务相关环境变量
 
 | 变量名                     | 说明                                                                 | 必填 | 默认值                      |
 |----------------------------|----------------------------------------------------------------------|----|-----------------------------|
@@ -62,7 +62,7 @@ docker run --rm \
   -v /path/to/i18n-iso-countries:/usr/src/app/node_modules/i18n-iso-countries/langs \
   -v /path/to/geodata:/build/geodata \
   ghcr.io/kuuds/immich-geodata-cn-companion:latest \
-  bash /update.sh
+  /update.sh
 ```
 
 ### **Docker**
@@ -126,6 +126,11 @@ services:
       - /path/to/geodata:/build/geodata
     depends_on:
       - immich
+```
+
+## Others
+
+- [ ] 使用API自动执行调用`Metadata Extraction`（当前API不支持以`全部`方式执行，等后续官方更新）
 
 ## License
 

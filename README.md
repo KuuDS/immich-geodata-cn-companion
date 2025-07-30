@@ -96,7 +96,10 @@ services:
     # ....
     volumes:
       - /path/to/geodata:/build/geodata
-      - /path/to/i18n:/usr/src/app/node_modules/i18n-iso-countries/langs
+      # immich 版本 >= 1.136.0
+      - /path/to/i18n:/usr/src/app/server/node_modules/i18n-iso-countries/langs
+      # immich 版本 < 1.136.0 (不含)
+      #- /path/to/i18n:/usr/src/app/node_modules/i18n-iso-countries/langs
   immich-geodata-cn-companion:
     image: ghcr.io/kuuds/immich-geodata-cn-companion:latest
     container_name: immich-geodata-cn-companion

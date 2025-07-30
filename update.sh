@@ -137,7 +137,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-release_id=$(cat "$release_file" | jq -r '.id')
+release_id=$(cat "$release_file" | jq -r '.name')
 
 # if release_id is null or empty, exit
 if [[ -z "$release_id" || "$release_id" == "null" ]]; then
